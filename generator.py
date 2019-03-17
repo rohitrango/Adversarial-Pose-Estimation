@@ -3,107 +3,14 @@ import torchvision
 import torch.nn as nn
 import torch.nn.functional as F
 
-
-
-class ConvReluBn(nn.Module):
-	'''
-		A block of convolution, relu, batchnorm
-	'''	
-
-	def __init__(self, in_channels, out_channels, kernel_size = 1, stride = 1, padding = 0):
-
-		super(ConvReluBn, self).__init__()
-
-		self.conv = nn.Conv2d(in_channels,out_channels,kernel_size,stride,padding)
-		self.relu = nn.ReLU()
-		self.bn   = nn.BatchNorm2d(out_channels)
-
-	def forward(self, x):
-
-		x = self.conv(x)
-		x = self.relu(x)
-		x = self.bn(x)
-
-		return x
-
-
-class ConvTripleBlock(nn.Module):
-	'''
-		A block of 3 ConvReluBn blocks. 
-		This triple block makes up a residual block as described in the paper
-		Resolution h x w does not change across this block
-	'''	
-
-	def __init__(self, in_channels, out_channels):
-
-		super(ConvTripleBlock, self).__init__()
-
-		out_channels_half = out_channels // 2
-
-		self.convblock1 = ConvReluBn(in_channels,out_channels_half)
-		self.convblock2 = ConvReluBn(out_channels_half,out_channels_half,3,1,1)
-		self.convblock3 = ConvReluBn(out_channels_half,out_channels)
-
-	def forward(self, x):
-
-		x = self.convblock1(x)
-		x = self.convblock2(x)
-		x = self.convblock3(x)
-
-		return x
-
-class SkipLayer(nn.Module):
-	'''
-		The skip connections are necessary for transferring global and local context
-		Resolution h x w does not change across this block
-	'''
-
-	def __init__(self, in_channels, out_channels):
-
-		super(SkipLayer, self).__init__()
-		
-		self.in_channels  = in_channels
-		self.out_channels = out_channels
-
-		if in_channels != out_channels:
-			self.conv = nn.Conv2d(in_channels,out_channels,1)
-
-	def forward(self, x):
-		
-		if self.in_channels != self.out_channels:
-			x = self.conv(x)
-
-		return x
-
-class Residual(nn.Module):
-	'''
-		The highly used Residual block
-		Resolution h x w does not change across this block
-	'''
-	def __init__(self, in_channels, out_channels):
-
-		super(Residual, self).__init__()
-
-		self.convblock = ConvTripleBlock(in_channels, out_channels)
-		self.skip 	   = SkipLayer(in_channels, out_channels)
-
-
-	def forward(self, x):
-
-		y = self.convblock(x)
-		z = self.skip(x)
-		o = y + z
-
-		return o
-
-
+import modules
 
 class Generator(nn.Module):
-	'''
+	"""
 		Must be fully convolutional with conv deconv architecture
-	'''	
+	"""	
 
-	def __init__(self, num_joints, num_stacks):
+	def __init__(self, num_joints, num_stacks, hourglass_params, mid_channels=512, preprocessed_channels=64):
 		
 		super(Generator, self).__init__()
 		
@@ -111,38 +18,58 @@ class Generator(nn.Module):
 		self.num_joints = num_joints
 
 		## Define Layers Here ##
-		self.startconv 	= ConvReluBn(3,64, kernel_size = 7, stride = 2, padding = 3)
-		self.maxpool 	= nn.MaxPool2d(2)
-		self.residual1	= nn.Residual(64,512)
-		self.residual2	= nn.Residual(512,512)
+		self.start_conv = modules.ConvBnRelu(in_channels=3, out_channels=preprocessed_channels, kernel_size=7, stride=2, padding=3)
+		self.max_pool = nn.MaxPool2d(kernel_size=2)
+		self.residual = []
+		self.residual.append(modules.Residual(in_channels=preprocessed_channels, out_channels=mid_channels))
+		self.residual2.append(modules.Residual(in_channels=mid_channels, out_channels=mid_channels))
 
+		stacked_hg = []
+		stacked_hg_in_channels = []
+		for _ in range(num_stacks):
+			stacked_hg.append(modules.StackedHourglass(mid_channels, hourglass_params))
+			if (i == 0):
+				stacked_hg_in_channels.append(mid_channels)
+			else:
+				stacked_hg_in_channels.append(mid_channels + num_joints * 2)
+		self.stacked_hg = stacked_hg		
+		
+		self.dim_reduction = [[], []]
+		for i in range(num_stacks):
+			self.dim_reduction[0].append(nn.Conv2d(in_channels=stacked_hg_in_channels[i], out_channels=num_joints, stride=1))
+			self.dim_reduction[1].append(nn.Conv2d(in_channels=stacked_hg_in_channels[i], out_channels=num_joints, stride=1))
+
+		self.final_upsample = nn.UpSample(scale_factor=mid_channels / preprocessed_channels, mode='nearest')
 
 	def forward(self, x):
-	'''
-		The forward pass of the network
-		Format : batch size x num chan x h x w
-	'''
+		"""
+			The forward pass of the network
+			Format : batch size x num chan x h x w
+		"""
 
-		orig = x+0
+		orig = x
 		# N x 3 x 256 x 256
-		x = self.startconv(x)
+		x = self.start_conv(x)
 		# N x 64 x 128 x 128
-		x = self.maxpool(x)
+		x = self.max_pool(x)
 		# N x 64 x 64 x 64
-		x = self.residual1(x)
+		x = self.residual[0](x)
 		# N x 512 x 64 x 64
-		x = self.residual2(x)
+		x = self.residual[1](x)
 		# N x 512 x 64 x 64
 		
 		
 		## Now this is input to the stacked network
+		inp = x
+		out = [None for _  in range(self.num_stacks)]
+		for i in range(self.num_stacks):
+			out[i] = self.stacked_hg[i](inp)
+			out[i][0] = self.dim_reduction[0][i](out[i][0])
+			out[i][1] = self.dim_reduction[1][i](out[i][1])
+			inp = torch.cat((out[i][0], out[i][1], x), dim=1)
 
+		for _ in range(self.num_stacks):
+			out[i] = torch.cat(out[i], dim=1)
+			out[i] = self.final_upsample(out[i])
 
-
-
-
-		# N x (num_joints) x 64 x 64
-
-		# N x (num_joints) x 256 x 256
-		
-		return x
+		return out
