@@ -15,13 +15,10 @@ from torchvision import datasets, models, transforms
 
 from datasets import lsp
 import generator, discriminator
+import losses
 
-import Model
-
-####################################
 parser = argparse.ArgumentParser()
 parser.add_argument('--modelName', required=True, help='name of model; name used to create folder to save model')
-parser.add_argument('--data', required=True, help='path to training data (train_data.txt)')
 parser.add_argument('--target', required=True, help='path to training labels (train_labels.txt)')
 parser.add_argument('--config', help='path to file containing config dictionary; path in python module format')
 parser.add_argument('--lr', type=float, default=0.01, help='learning rate')
@@ -30,9 +27,16 @@ parser.add_argument('--momentum', type=float, default=0.9, help='momentum in mom
 parser.add_argument('--batch_size', type=int, default=32, help='batch size for training, testing')
 parser.add_argument('--print_every', type=int, default=1000, help='frequency to print train loss, accuracy to terminal')
 parser.add_argument('--save_every', type=int, default=1, help='frequency of saving the model')
-parser.add_argument('--fraction_validation', type=float, default=0.1, help='fraction of data to be used for validation')
 parser.add_argument('--optimizer_type', default='SGD', help='type of optimizer to use (SGD or Adam)')
 parser.add_argument('--use_gpu', action='store_true', help='whether to use gpu for training/testing')
+
+parser.add_argument('--path', \
+    default='/home/rohitrango/CSE_IITB/SEM8/CS763/Adversarial-Pose-Estimation/lspet_dataset')
+parser.add_argument('--mode', default='train')
+parser.add_argument('--crop_size', default=256)
+parser.add_argument('--train_split', type=float, default=0.85)
+parser.add_argument('--heatmap_sigma', type=float, default=2)
+parser.add_argument('--occlusion_sigma', type=float, default=5)
 
 args = parser.parse_args()
 
@@ -57,137 +61,108 @@ if (args.use_gpu):
 
 # config file storing hyperparameters
 config = importlib.import_module(args.config).config
-####################################
 
 
-
-(X_train, y_train), (X_val, y_val), word_to_index = data_loader.load_train_val_dataset(args.data, args.target, args.fraction_validation)
-train_dataset = data_loader.ListDataset(X_train, y_train, word_to_index)
-val_dataset = None
-if (X_val is not None):
-    val_dataset = data_loader.ListDataset(X_val, y_val, word_to_index)
-
-pad_tensor = data_loader.one_hot_tensor(word_to_index['PAD'], len(word_to_index))
-train_loader = data_loader.DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=data_loader.PadCollate(config['dataset']['seq_max_len'], pad_tensor, config['dataset']['pad_beginning'], config['dataset']['truncate_end']))
-val_loader = None
-if (X_val is not None):
-    val_loader = data_loader.DataLoader(val_dataset, batch_size=args.batch_size, collate_fn=data_loader.PadCollate(config['dataset']['seq_max_len'], pad_tensor, config['dataset']['pad_beginning'], config['dataset']['truncate_end']))
-
-
-####################################
+# Initializing the models
 generator_model = Generator(config['dataset']['num_joints'], config['generator']['num_stacks'], config['generator']['hourglass_params'], config['generator']['mid_channels'], config['generator']['preprocessed_channels'])
 discriminator_model = Discriminator(config['discriminator']['in_channels'], config['discriminator']['num_channels'], config['dataset']['num_joints'], config['discriminator']['num_residuals'])
 
-if (args.use_gpu):
-    model = model.cuda()
+# Dataset and the Dataloader
+lsp_dataset = LSP(args)
+train_loader = torch.utils.data.DataLoader(lsp_dataset, batch_size=args.batch_size, shuffle=True)
 
+# Loading on GPU, if available
+if (args.use_gpu):
+    generator_model = generator_model.cuda()
+    discriminator_model = discriminator_model.cuda()
+
+# Cross entropy loss
 criterion = nn.CrossEntropyLoss()
 
+# Setting the optimizer
 if (args.optimizer_type == 'SGD'):
-    optim = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
+    optim_gen = optim.SGD(generator_model.parameters(), lr=args.lr, momentum=args.momentum)
+    optim_disc = optim.SGD(discriminator_model.parameters(), lr=args.lr, momentum=args.momentum)
+
 elif (args.optimizer_type == 'Adam'):
-    optim = optim.Adam(model.parameters(), lr=args.lr)
+    optim_gen = optim.Adam(generator_model.parameters(), lr=args.lr)
+    optim_disc = optim.Adam(discriminator_model.parameters(), lr=args.lr)
+
 else:
     raise NotImplementedError
-####################################
 
-loss = []
-acc = []
-val_acc = []
-
-def get_init_state(network_params, batch_size, fast_device):
-    if (network_params['cell_type'] == 'RNN'):
-        init_state = torch.zeros((network_params['num_layers'], batch_size, network_params['hidden_size']))
-        init_state = init_state.to(fast_device)
-    elif (network_params['cell_type'] == 'LSTM'):
-        init_state = (torch.zeros((network_params['num_layers'], batch_size, network_params['hidden_size'])), 
-                      torch.zeros((network_params['num_layers'], batch_size, network_params['hidden_size'])))
-        init_state = (init_state[0].to(fast_device), init_state[1].to(fast_device))
-    return init_state
-
-def get_accuracy(model, data_loader, fast_device):
-    acc = 0.0
-    num_data = 0
-    data_loader.reset_pos()
-    with torch.no_grad():
-        while (not data_loader.is_done_epoch()):
-            batch_xs, batch_ys = data_loader.next_batch()
-            batch_xs, batch_ys = batch_xs.to(fast_device), batch_ys.to(fast_device)
-            
-            cur_batch_size = batch_xs.size(0)
-            # init_state = get_init_state(config['network'], batch_xs.size(1), fast_device)
-            scores = model.forward(batch_xs)
-
-            acc += torch.sum(torch.argmax(scores, dim=1).long() == batch_ys.long()).item() * 1.0
-            num_data += cur_batch_size
-
-    return acc / num_data
+# The main training loop
+gen_losses = []
+disc_losses = []
 
 for epoch in range(args.epochs):
     print('epoch:', epoch)
-    i = 0
 
     if (epoch % args.save_every == 0):
-        torch.save({'model': model, 
+        torch.save({'generator_model': generator_model,
+                    'discriminator_model': discriminator_model,
                     'criterion': criterion, 
-                    'optim': optim, 
-                    'word_to_index': word_to_index}, os.path.join(args.modelName, 'model_' + str(epoch) + '.pt'))
+                    'optim': optim}, os.path.join(args.modelName, 'model_' + str(epoch) + '.pt'))
 
-    val_acc.append(get_accuracy(model, val_loader, fast_device))
-    print('Validation Accuracy: %f' % (val_acc[-1], ))
+    epoch_gen_loss = 0.0
+    epoch_disc_loss = 0.0
 
-    epoch_loss, epoch_acc = 0.0, 0.0
-    num_train = 0
-    train_loader.reset_pos()
-    while (not train_loader.is_done_epoch()):
-        batch_xs, batch_ys = train_loader.next_batch()
-        batch_xs, batch_ys = batch_xs.to(fast_device), batch_ys.to(fast_device)
-        cur_batch_size = batch_xs.size(0)
-        optim.zero_grad()
-        # init_state = get_init_state(config['network'], cur_batch_size, fast_device)
-        scores = model.forward(batch_xs)
+    for i, data in enumerate(train_loader):
+
+        optim_gen.zero_grad()
+        optim_disc.zero_grad()
         
-        cur_loss = criterion.forward(scores, batch_ys)
-        cur_acc = torch.sum(torch.argmax(scores, dim=1).long() == batch_ys.long()).item() * 1.0 / cur_batch_size
-        epoch_loss += cur_loss.item() * cur_batch_size
-        epoch_acc += cur_acc * cur_batch_size
-        num_train += cur_batch_size
+        images = data['image']
+        ground_truth = {}
+        ground_truth['heatmaps'] = data['heatmaps']
+        ground_truth['occlusions'] = data['occlusions']
 
-        loss.append(cur_loss.item())
-        acc.append(cur_acc)
-        
-        grad_output = criterion.backward(scores, batch_ys)
-        model.backward(batch_xs, grad_output)
-        optim.step()
-        
-        if (i % args.print_every == 0):
-            print("iter: %d, Train loss : %f, Train acc : %f" % (i ,loss[-1], acc[-1]))
+    ################################## Check and complete the code here #######################################################
 
-        i += 1
+        ############# Forward pass and calculate losses here #########
+        outputs = generator_model(images)
 
-    epoch_loss /= num_train
-    epoch_acc /= num_train
+        cur_gen_loss_dic = gen_single_loss(ground_truth, outputs, discriminator_model)
+        cur_disc_loss_dic = disc_single_loss(ground_truth, outputs, discriminator_model)
 
-    print('Epoch train loss: %f, epoch train acc: %f' % (epoch_loss, epoch_acc))
+        cur_gen_loss = cur_gen_loss_dic['loss']
+        cur_disc_loss = cur_disc_loss_dic['loss']
 
-torch.save({'model': model, 
+        ######### Backpropagating the losses here #######
+
+        cur_gen_loss.backward()
+        cur_disc_loss.backward()
+
+        optim_gen.step()
+        optim_disc.step()
+
+        gen_losses.append(cur_gen_loss)
+        disc_losses.append(cur_disc_loss)
+
+        epoch_gen_loss += cur_gen_loss
+        epoch_disc_loss += cur_disc_loss
+
+        if i % args.print_every == 0:
+            print("Train iter: %d, generator loss : %f, discriminator loss : %f" % (i ,gen_losses[-1], disc_losses[-1]))
+
+    epoch_gen_loss /= len(lsp_dataset)
+    epoch_disc_loss /= len(lsp_dataset)
+
+    print('Epoch train gen loss: %f' % (epoch_gen_loss))
+    print('Epoch train disc loss: %f' % (epoch_disc_loss))
+
+    ######################################################################################################################
+
+# Saving the model and the losses
+torch.save({'generator_model': generator_model,
+            'discriminator_model': discriminator_model,
             'criterion': criterion, 
-            'optim': optim, 
-            'word_to_index': word_to_index}, os.path.join(args.modelName, 'model_final.pt'))
+            'optim': optim}, os.path.join(args.modelName, 'model_' + str(epoch) + '.pt'))
 
 with open(os.path.join(args.modelName, 'stats.bin'), 'wb') as f:
-    pickle.dump((val_acc, loss, acc), f)
+    pickle.dump((disc_losses, gen_losses), f)
 
-with open(os.path.join(args.modelName, 'stats.txt'), 'w') as f:
-    f.write('Validation accuracy : %f' % (val_acc[-1]))
-
-plt.plot(val_acc)
-plt.savefig(os.path.join(args.modelName, 'val_acc_graph.pdf'))
-plt.clf()
-
+# Plotting the loss function
 plt.plot(loss)
 plt.savefig(os.path.join(args.modelName, 'loss_graph.pdf'))
-plt.clf()
-plt.plot(acc)
-plt.savefig(os.path.join(args.modelName, 'acc_graph.pdf'))
 plt.clf()

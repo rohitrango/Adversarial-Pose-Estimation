@@ -57,7 +57,7 @@ def gen_loss(ground_truth,
 	}
 
 
-def dis_loss(ground_truth,
+def disc_loss(ground_truth,
 			 outputs,
 			 pose_discriminator,
 			 conf_discriminator,
@@ -83,5 +83,60 @@ def dis_loss(ground_truth,
 		'conf_disc_real': loss_conf_real,
 		'pose_disc_real': loss_pose_real,
 		'conf_disc_fake': loss_conf_disc,
+		'pose_disc_fake': loss_pose_disc,
+	}
+
+def gen_single_loss(ground_truth,
+			 outputs,
+			 pose_discriminator,
+			 mode='mse',
+			 alpha=1/220.,
+			 beta=1/180.
+			):
+	'''
+	Get generator loss
+	'''
+
+	gt_maps = torch.cat([ground_truth['heatmaps'], ground_truth['occlusions']], 1)
+	loss_recon = 0.0
+	loss_pose_disc = 0.0
+	for output in outputs:
+		loss_recon = loss_recon + get_loss_recon(output, gt_maps, mode)
+		loss_pose_disc = loss_pose_disc + get_loss_disc(output, pose_discriminator)
+
+	loss_recon = loss_recon / len(outputs)
+	loss_pose_disc = loss_pose_disc / len(outputs)
+
+	# Add discriminator loss
+	return {
+		'loss': loss_recon + beta*loss_pose_disc,
+		'recon': loss_recon,
+		'pose_disc': loss_pose_disc,
+	}
+
+
+def disc_single_loss(ground_truth,
+			 outputs,
+			 pose_discriminator,
+			 alpha=1/220.0,
+			 beta=1/180.0
+			):
+	'''
+	Get discriminator loss
+	'''
+
+	gt_maps = torch.cat([ground_truth['heatmaps'], ground_truth['occlusions']], 1)
+	loss_pose_real = get_loss_disc(gt_maps, pose_discriminator)
+
+	# False for generator
+	for output in outputs:
+		loss_pose_disc = loss_pose_disc + get_loss_disc(output, pose_discriminator, detach=False, real=False)
+
+	loss_pose_disc = loss_pose_disc / len(outputs)
+
+	# Add discriminator loss
+	return {
+		'loss': (loss_pose_real + loss_pose_disc),
+		'pose_disc_real': loss_pose_real,
 		'pose_disc_fake': loss_pose_disc,
 	}
