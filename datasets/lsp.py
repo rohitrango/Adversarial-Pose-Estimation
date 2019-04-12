@@ -11,6 +11,7 @@ import torch
 from torch.utils.data import Dataset
 from matplotlib import pyplot as plt
 import numpy as np
+# from PIL import Image
 
 
 parser = argparse.ArgumentParser()
@@ -60,6 +61,10 @@ class LSP(Dataset):
 
         # Get the i'th entry
         file_name = self.files[idx]
+        # image = Image.open(file_name)
+        # b, g, r = image.split()
+        # image = image.merge('RGB', (r, g, b))
+        # image = image.resize((self.crop_size, self.crop_size))
         image = cv2.cvtColor(cv2.imread(file_name), cv2.COLOR_BGR2RGB)
         crop_image = cv2.resize(image, (self.crop_size, self.crop_size))
 

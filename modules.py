@@ -102,6 +102,8 @@ class Hourglass(nn.Module):
 
 	def __init__(self, num_channels, num_reductions=4, num_residual_modules=2):
 
+		super(Hourglass, self).__init__()
+
 		scale_factor = 2
 		self.num_reductions = num_reductions
 
@@ -131,7 +133,7 @@ class Hourglass(nn.Module):
 			end_residual.append(Residual(num_channels, num_channels))
 		self.end_residual = nn.Sequential(*end_residual)
 
-		self.up_sample = nn.UpSample(scale_factor=scale_factor, mode='nearest')
+		self.up_sample = nn.Upsample(scale_factor=scale_factor, mode='nearest')
 
 
 	def forward(self, x):
@@ -158,12 +160,14 @@ class StackedHourglass(nn.Module):
 	"""
 
 	def __init__(self, num_channels, hourglass_params):
+		super(StackedHourglass, self).__init__()
 		hg = []
 		for _ in range(2):
 			hg.append(Hourglass(num_channels, hourglass_params['num_reductions'], hourglass_params['num_residual_modules']))
 		self.hg = hg
 
-		self.dim_reduction = nn.Conv2d(in_channels=2 * num_channels, out_channels=num_channels, stride=1)
+		######################## check if kernel_size is 1 ##############################
+		self.dim_reduction = nn.Conv2d(in_channels=2 * num_channels, out_channels=num_channels, kernel_size=1, stride=1)
 		
 	def forward(self, x):
 		y = x

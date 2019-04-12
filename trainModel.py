@@ -13,13 +13,13 @@ import torch.optim as optim
 import torchvision
 from torchvision import datasets, models, transforms
 
-from datasets import lsp
-import generator, discriminator
-import losses
+from datasets.lsp import LSP
+from generator import Generator
+from discriminator import Discriminator
+from losses import gen_single_loss, disc_single_loss
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--modelName', required=True, help='name of model; name used to create folder to save model')
-parser.add_argument('--target', required=True, help='path to training labels (train_labels.txt)')
 parser.add_argument('--config', help='path to file containing config dictionary; path in python module format')
 parser.add_argument('--lr', type=float, default=0.01, help='learning rate')
 parser.add_argument('--epochs', type=int, default=50, help='number of epochs')
@@ -102,7 +102,8 @@ for epoch in range(args.epochs):
         torch.save({'generator_model': generator_model,
                     'discriminator_model': discriminator_model,
                     'criterion': criterion, 
-                    'optim': optim}, os.path.join(args.modelName, 'model_' + str(epoch) + '.pt'))
+                    'optim_gen': optim_gen, 
+                    'optim_disc': optim_disc}, os.path.join(args.modelName, 'model_' + str(epoch) + '.pt'))
 
     epoch_gen_loss = 0.0
     epoch_disc_loss = 0.0
@@ -157,7 +158,8 @@ for epoch in range(args.epochs):
 torch.save({'generator_model': generator_model,
             'discriminator_model': discriminator_model,
             'criterion': criterion, 
-            'optim': optim}, os.path.join(args.modelName, 'model_' + str(epoch) + '.pt'))
+            'optim_gen': optim_gen, 
+            'optim_disc': optim_disc}, os.path.join(args.modelName, 'model_' + str(epoch) + '.pt'))
 
 with open(os.path.join(args.modelName, 'stats.bin'), 'wb') as f:
     pickle.dump((disc_losses, gen_losses), f)

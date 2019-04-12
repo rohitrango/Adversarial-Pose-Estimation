@@ -3,19 +3,20 @@ import torchvision
 import torch.nn as nn
 import torch.nn.functional as F
 
-import modules
+from modules import Residual
 
 class Discriminator(nn.Module):
 
 	def __init__(self, in_channels, num_channels, num_joints, num_residuals=5):
-	'''
-		Initialisation of the Discriminator network
-		Contains the necessary modules
-		Input is pose and confidence heatmaps
-		in_channels = num_joints x 2 + 3 (for the image) (Pose network)
-		in_channels = num_joints x 2 (Confidence network)
-	'''	
-		super(PoseDiscriminator, self).__init__()
+		'''
+			Initialisation of the Discriminator network
+			Contains the necessary modules
+			Input is pose and confidence heatmaps
+			in_channels = num_joints x 2 + 3 (for the image) (Pose network)
+			in_channels = num_joints x 2 (Confidence network)
+		'''
+		
+		super(Discriminator, self).__init__()
 		## Define Layers Here ##
 
 		self.residual  = []
@@ -30,10 +31,10 @@ class Discriminator(nn.Module):
 		self.fc2 	   = nn.Linear(128, num_joints)
 
 	def forward(self, x):
-	"""
-		Assuming num channels is 512 and in_channels, num_residuals = 5
+		"""
+			Assuming num channels is 512 and in_channels, num_residuals = 5
 
-	"""
+		"""
 		# N x in_channels x 256 x 256
 		x = self.residual[0](x)
 		# N x 512 x 256 x 256

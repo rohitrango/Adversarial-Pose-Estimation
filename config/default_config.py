@@ -24,4 +24,4 @@ generator['hourglass_params'] = hourglass_params
 generator['mid_channels'] = 512
 generator['preprocessed_channels'] = 64
 
-config = {'dataset': dataset, 'generator': generator, 'pose discriminator': pose_discriminator}
+config = {'dataset': dataset, 'generator': generator, 'discriminator': pose_discriminator}

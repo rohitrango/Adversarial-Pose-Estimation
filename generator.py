@@ -22,24 +22,26 @@ class Generator(nn.Module):
 		self.max_pool = nn.MaxPool2d(kernel_size=2)
 		self.residual = []
 		self.residual.append(modules.Residual(in_channels=preprocessed_channels, out_channels=mid_channels))
-		self.residual2.append(modules.Residual(in_channels=mid_channels, out_channels=mid_channels))
+		self.residual.append(modules.Residual(in_channels=mid_channels, out_channels=mid_channels))
 
 		stacked_hg = []
 		stacked_hg_in_channels = []
-		for _ in range(num_stacks):
-			stacked_hg.append(modules.StackedHourglass(mid_channels, hourglass_params))
+		for i in range(num_stacks):
 			if (i == 0):
 				stacked_hg_in_channels.append(mid_channels)
+				stacked_hg.append(modules.StackedHourglass(mid_channels, hourglass_params))
 			else:
 				stacked_hg_in_channels.append(mid_channels + num_joints * 2)
+				stacked_hg.append(modules.StackedHourglass(mid_channels + num_joints * 2, hourglass_params))
 		self.stacked_hg = stacked_hg		
 		
 		self.dim_reduction = [[], []]
 		for i in range(num_stacks):
-			self.dim_reduction[0].append(nn.Conv2d(in_channels=stacked_hg_in_channels[i], out_channels=num_joints, stride=1))
-			self.dim_reduction[1].append(nn.Conv2d(in_channels=stacked_hg_in_channels[i], out_channels=num_joints, stride=1))
+			###################################### check if kernel_size is 1 #################
+			self.dim_reduction[0].append(nn.Conv2d(in_channels=stacked_hg_in_channels[i], out_channels=num_joints, kernel_size=1, stride=1))
+			self.dim_reduction[1].append(nn.Conv2d(in_channels=stacked_hg_in_channels[i], out_channels=num_joints, kernel_size=1, stride=1))
 
-		self.final_upsample = nn.UpSample(scale_factor=mid_channels / preprocessed_channels, mode='nearest')
+		self.final_upsample = nn.Upsample(scale_factor=mid_channels / preprocessed_channels, mode='nearest')
 
 	def forward(self, x):
 		"""
