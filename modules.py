@@ -166,7 +166,6 @@ class StackedHourglass(nn.Module):
 			hg.append(Hourglass(num_channels, hourglass_params['num_reductions'], hourglass_params['num_residual_modules']))
 		self.hg = hg
 
-		######################## check if kernel_size is 1 ##############################
 		self.dim_reduction = nn.Conv2d(in_channels=2 * num_channels, out_channels=num_channels, kernel_size=1, stride=1)
 		
 	def forward(self, x):

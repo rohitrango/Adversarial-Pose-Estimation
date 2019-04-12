@@ -37,7 +37,6 @@ class Generator(nn.Module):
 		
 		self.dim_reduction = [[], []]
 		for i in range(num_stacks):
-			###################################### check if kernel_size is 1 #################
 			self.dim_reduction[0].append(nn.Conv2d(in_channels=stacked_hg_in_channels[i], out_channels=num_joints, kernel_size=1, stride=1))
 			self.dim_reduction[1].append(nn.Conv2d(in_channels=stacked_hg_in_channels[i], out_channels=num_joints, kernel_size=1, stride=1))
 
