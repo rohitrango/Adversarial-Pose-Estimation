@@ -11,6 +11,8 @@ def get_loss_recon(out, inp, mode):
 		loss = ((out - inp)**2).mean()
 	else:
 		raise NotImplementedError
+	
+	return loss
 
 
 def get_loss_disc(output, discriminator, detach=False, real=True, eps=1e-10):
@@ -102,7 +104,7 @@ def gen_single_loss(ground_truth,
 	loss_pose_disc = 0.0
 	for output in outputs:
 		loss_recon = loss_recon + get_loss_recon(output, gt_maps, mode)
-		loss_pose_disc = loss_pose_disc + get_loss_disc(output, pose_discriminator)
+		# loss_pose_disc = loss_pose_disc + get_loss_disc(output, pose_discriminator)
 
 	loss_recon = loss_recon / len(outputs)
 	loss_pose_disc = loss_pose_disc / len(outputs)
@@ -119,8 +121,8 @@ def disc_single_loss(ground_truth,
 			 outputs,
 			 pose_discriminator,
 			 alpha=1/220.0,
-			 beta=1/180.0
-			):
+			 beta=1/180.0, 
+			 detach=False):
 	'''
 	Get discriminator loss
 	'''
@@ -128,9 +130,11 @@ def disc_single_loss(ground_truth,
 	gt_maps = torch.cat([ground_truth['heatmaps'], ground_truth['occlusions']], 1)
 	loss_pose_real = get_loss_disc(gt_maps, pose_discriminator)
 
+	loss_pose_disc = 0.0
+	# TODO: fix the expression in function get_loss_disc for CGAN. Currently, implements traditional GAN
 	# False for generator
 	for output in outputs:
-		loss_pose_disc = loss_pose_disc + get_loss_disc(output, pose_discriminator, detach=False, real=False)
+		loss_pose_disc = loss_pose_disc + get_loss_disc(output, pose_discriminator, detach=detach, real=False)
 
 	loss_pose_disc = loss_pose_disc / len(outputs)
 

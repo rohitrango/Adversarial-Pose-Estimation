@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from modules import Residual
+from modules import ListModule
 
 class Discriminator(nn.Module):
 
@@ -24,11 +25,13 @@ class Discriminator(nn.Module):
 		self.residual.append(Residual(in_channels, num_channels))
 		for _ in range(num_residuals-1):
 			self.residual.append(Residual(num_channels, num_channels))
+		
+		self.residual = ListModule(*self.residual)
 
-		self.max_pool  = nn.MaxPool2d(2,2)
-		self.fc1 	   = nn.Linear(num_channels*16*16, 128)
-		self.relu  	   = nn.ReLU()
-		self.fc2 	   = nn.Linear(128, num_joints)
+		self.max_pool = nn.MaxPool2d(2,2)
+		self.fc1 = nn.Linear(num_channels*16*16, 128)
+		self.relu = nn.ReLU()
+		self.fc2 = nn.Linear(128, num_joints)
 
 	def forward(self, x):
 		"""
@@ -46,11 +49,11 @@ class Discriminator(nn.Module):
 		# N x 512 x 16 x 16
 		x = x.view(x.shape[0], -1)
 		# N x (512 * 16 * 16)
-		x = x.fc1(x)
+		x = self.fc1(x)
 		# N x 128
-		x = x.relu(x)
+		x = self.relu(x)
 		# N x 128
-		x = x.fc2(x)
+		x = self.fc2(x)
 		# N x 16
 		x = F.sigmoid(x)
 

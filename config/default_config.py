@@ -9,10 +9,11 @@ hourglass_params['num_reductions'] = 4
 hourglass_params['num_residual_modules'] = 2
 
 dataset = {}
-dataset['num_joints'] = 16
+dataset['num_joints'] = 14
 
 pose_discriminator = {}
-pose_discriminator['in_channels'] = dataset['num_joints']*2 + 3
+# TODO: base case now; add 3 later for in_channels
+pose_discriminator['in_channels'] = dataset['num_joints']*2
 pose_discriminator['num_channels'] = 128
 # pose_discriminator['num_joints'] = dataset['num_joints']
 pose_discriminator['num_residuals'] = 5
@@ -24,4 +25,10 @@ generator['hourglass_params'] = hourglass_params
 generator['mid_channels'] = 512
 generator['preprocessed_channels'] = 64
 
-config = {'dataset': dataset, 'generator': generator, 'discriminator': pose_discriminator}
+training = {}
+training['gen_iters'] = 1
+training['disc_iters'] = 0
+training['alpha'] = 1.0 / 220
+
+config = {'dataset': dataset, 'generator': generator, 'discriminator': pose_discriminator, 
+            'training': training}

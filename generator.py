@@ -23,6 +23,7 @@ class Generator(nn.Module):
 		self.residual = []
 		self.residual.append(modules.Residual(in_channels=preprocessed_channels, out_channels=mid_channels))
 		self.residual.append(modules.Residual(in_channels=mid_channels, out_channels=mid_channels))
+		self.residual = modules.ListModule(*self.residual)
 
 		stacked_hg = []
 		stacked_hg_in_channels = []
@@ -33,14 +34,19 @@ class Generator(nn.Module):
 			else:
 				stacked_hg_in_channels.append(mid_channels + num_joints * 2)
 				stacked_hg.append(modules.StackedHourglass(mid_channels + num_joints * 2, hourglass_params))
-		self.stacked_hg = stacked_hg		
+		self.stacked_hg = modules.ListModule(*stacked_hg)
 		
 		self.dim_reduction = [[], []]
 		for i in range(num_stacks):
 			self.dim_reduction[0].append(nn.Conv2d(in_channels=stacked_hg_in_channels[i], out_channels=num_joints, kernel_size=1, stride=1))
 			self.dim_reduction[1].append(nn.Conv2d(in_channels=stacked_hg_in_channels[i], out_channels=num_joints, kernel_size=1, stride=1))
 
-		self.final_upsample = nn.Upsample(scale_factor=mid_channels / preprocessed_channels, mode='nearest')
+		self.dim_reduction[0] = modules.ListModule(*self.dim_reduction[0])
+		self.dim_reduction[1] = modules.ListModule(*self.dim_reduction[1])
+		self.dim_reduction = modules.ListModule(*self.dim_reduction)
+
+		# TODO: hardcoding width
+		self.final_upsample = nn.Upsample(scale_factor=256 / 64, mode='nearest')
 
 	def forward(self, x):
 		"""
@@ -69,7 +75,7 @@ class Generator(nn.Module):
 			out[i][1] = self.dim_reduction[1][i](out[i][1])
 			inp = torch.cat((out[i][0], out[i][1], x), dim=1)
 
-		for _ in range(self.num_stacks):
+		for i in range(self.num_stacks):
 			out[i] = torch.cat(out[i], dim=1)
 			out[i] = self.final_upsample(out[i])
 
