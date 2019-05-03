@@ -15,15 +15,15 @@ def get_loss_recon(out, inp, mode):
 	return loss
 
 
-def get_loss_disc(output, discriminator, detach=False, real=True, eps=1e-10):
+def get_loss_disc(output, discriminator, detach=False, real=True, eps=1e-5):
 	'''
 	Get discriminator loss
 	'''
 	outs = output.detach() if detach else output
 	if real:
-		loss = torch.log(eps + discriminator(outs)).mean()
+		loss = -torch.log(eps + discriminator(outs)).mean()
 	else:
-		loss = torch.log(eps + 1 - discriminator(outs)).mean()
+		loss = -torch.log(eps + 1 - discriminator(outs)).mean()
 	return loss
 
 
@@ -111,7 +111,7 @@ def gen_single_loss(ground_truth,
 
 	# Add discriminator loss
 	return {
-		'loss': loss_recon + beta*loss_pose_disc,
+		'loss': loss_recon, #+ beta*loss_pose_disc,
 		'recon': loss_recon,
 		'pose_disc': loss_pose_disc,
 	}

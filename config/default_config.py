@@ -27,8 +27,9 @@ generator['preprocessed_channels'] = 64
 
 training = {}
 training['gen_iters'] = 1
-training['disc_iters'] = 0
-training['alpha'] = 1.0 / 220
+training['disc_iters'] = 1
+# training['alpha'] = 1.0 / 220
+training['alpha'] = 0.1
 
 config = {'dataset': dataset, 'generator': generator, 'discriminator': pose_discriminator, 
             'training': training}

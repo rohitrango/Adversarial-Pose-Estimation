@@ -17,7 +17,7 @@ import cv2
 from datasets.lsp import LSP
 from generator import Generator
 from discriminator import Discriminator
-from losses import gen_single_loss, disc_single_loss
+from losses import gen_single_loss, disc_single_loss, get_loss_disc
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--modelName', required=True, help='name of model; name used to create folder to save model')
@@ -31,6 +31,8 @@ parser.add_argument('--save_every', type=int, default=10, help='frequency of sav
 parser.add_argument('--optimizer_type', default='SGD', help='type of optimizer to use (SGD or Adam)')
 parser.add_argument('--use_gpu', action='store_true', help='whether to use gpu for training/testing')
 parser.add_argument('--gpu_device', type=int, default=0, help='GPU device which needs to be used for computation')
+parser.add_argument('--validation_sample_size', type=int, default=20, help='size of validation sample')
+parser.add_argument('--validate_every', type=int, default=100, help='frequency of evaluating on validation set')
 
 parser.add_argument('--path', \
     default='/home/rohitrango/CSE_IITB/SEM8/CS763/Adversarial-Pose-Estimation/lspet_dataset')
@@ -74,7 +76,8 @@ lsp_train_dataset = LSP(args)
 args.mode = 'val'
 lsp_val_dataset = LSP(args)
 train_loader = torch.utils.data.DataLoader(lsp_train_dataset, batch_size=args.batch_size, shuffle=True)
-val_loader = torch.utils.data.DataLoader(lsp_val_dataset, batch_size=args.batch_size)
+val_save_loader = torch.utils.data.DataLoader(lsp_val_dataset, batch_size=args.batch_size)
+val_eval_loader = torch.utils.data.DataLoader(lsp_val_dataset, batch_size=args.batch_size)
 
 # Loading on GPU, if available
 if (args.use_gpu):
@@ -153,17 +156,17 @@ def evaluate_model(args, epoch, val_loader, fast_device, generator_model, discri
         
     return gen_loss, disc_loss
 
-
+val_pos = 0
 for epoch in range(args.epochs):
     print('epoch:', epoch)
 
-    if (epoch > 0 and epoch % args.save_every == 0):
+    if (epoch % args.save_every == 0):
         torch.save({'generator_model': generator_model,
                     'discriminator_model': discriminator_model,
                     'criterion': criterion, 
                     'optim_gen': optim_gen, 
                     'optim_disc': optim_disc}, os.path.join(args.modelName, 'model_' + str(epoch) + '.pt'))
-        val_gen_loss, val_disc_loss = evaluate_model(args, epoch, val_loader, fast_device, generator_model, discriminator_model)
+        val_gen_loss, val_disc_loss = evaluate_model(args, epoch, val_save_loader, fast_device, generator_model, discriminator_model)
         val_gen_losses.append(val_gen_loss)
         val_disc_losses.append(val_disc_loss)
 
@@ -188,13 +191,16 @@ for epoch in range(args.epochs):
         ############# Forward pass and calculate losses here #########
 
         if (i % (config['training']['gen_iters'] + config['training']['disc_iters']) < config['training']['gen_iters']):
+            # Generator training
             outputs = generator_model(images)
 
             cur_gen_loss_dic = gen_single_loss(ground_truth, outputs, discriminator_model)
-            cur_disc_loss_dic = disc_single_loss(ground_truth, outputs, discriminator_model)
+            cur_disc_loss_dic = 0.0
+            for output in outputs:
+                cur_disc_loss_dic = get_loss_disc(output, discriminator_model, real=True)
 
             cur_gen_loss = cur_gen_loss_dic['loss']
-            cur_disc_loss = cur_disc_loss_dic['loss']
+            cur_disc_loss = cur_disc_loss_dic
 
             loss = cur_gen_loss + config['training']['alpha'] * cur_disc_loss
             loss.backward()
@@ -203,6 +209,7 @@ for epoch in range(args.epochs):
             optim_disc.zero_grad()
             
         else:
+            # Discriminator training
             outputs = generator_model(images)
 
             cur_gen_loss_dic = gen_single_loss(ground_truth, outputs, discriminator_model)
@@ -228,6 +235,29 @@ for epoch in range(args.epochs):
 
         if i % args.print_every == 0:
             print("Train iter: %d, generator loss : %f, discriminator loss : %f" % (i ,gen_losses[-1], disc_losses[-1]))
+        
+        if i % args.validate_every == 0:
+            for j, data in enumerate(val_save_loader):
+                # if (j == args.validation_sample_size):
+                    # break
+                images = data['image']
+        
+                ground_truth = {}
+                ground_truth['heatmaps'] = data['heatmaps']
+                ground_truth['occlusions'] = data['occlusions']
+        
+                if (args.use_gpu):
+                    images = images.to(fast_device)
+                    ground_truth['heatmaps'] = ground_truth['heatmaps'].to(fast_device)
+                    ground_truth['occlusions'] = ground_truth['occlusions'].to(fast_device)
+
+                with torch.no_grad():
+                    outputs = generator_model(images)
+                    cur_gen_loss_dic = gen_single_loss(ground_truth, outputs, discriminator_model)
+                    cur_disc_loss_dic = disc_single_loss(ground_truth, outputs, discriminator_model)
+
+                print("Validation generator loss: %f, discriminator loss: %f" % (gen_loss, disc_loss))
+                break
 
     epoch_gen_loss /= len(lsp_train_dataset)
     epoch_disc_loss /= len(lsp_train_dataset)
