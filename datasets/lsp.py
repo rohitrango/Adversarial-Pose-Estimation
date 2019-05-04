@@ -61,6 +61,8 @@ class LSP(Dataset):
 
         # Get the i'th entry
         file_name = self.files[idx]
+        # if (self.mode == 'val'):
+            # print('reading ', file_name)
         # image = Image.open(file_name)
         # b, g, r = image.split()
         # image = image.merge('RGB', (r, g, b))
@@ -69,7 +71,7 @@ class LSP(Dataset):
         crop_image = cv2.resize(image, (self.crop_size, self.crop_size))
 
         # Read annotations
-        annot = self.annot[:, :, idx]
+        annot = self.annot[:, :, idx] + 0.0
         # annot = K * 3
         annot[:, :2] = annot[:, :2] * np.array(\
             [[self.crop_size*1.0/image.shape[1], self.crop_size*1.0/image.shape[0]]])
@@ -81,7 +83,7 @@ class LSP(Dataset):
         occlusions = np.zeros((annot.shape[0], self.crop_size, self.crop_size)) 
         # Annotate heatmap
         for joint_id in range(annot.shape[0]):
-            x_c, y_c, vis = annot[joint_id]
+            x_c, y_c, vis = annot[joint_id] + 0
             heatmaps[joint_id] = np.exp(-0.5*((x_c - xx)**2 + (y_c - yy)**2)/(self.heatmap_sigma**2))
             occlusions[joint_id] = (1 - vis)*np.exp(-0.5*((x_c - xx)**2 + (y_c - yy)**2)/(self.occlusion_sigma**2))
 

@@ -71,8 +71,8 @@ class Generator(nn.Module):
 		out = [None for _  in range(self.num_stacks)]
 		for i in range(self.num_stacks):
 			out[i] = self.stacked_hg[i](inp)
-			out[i][0] = self.dim_reduction[0][i](out[i][0])
-			out[i][1] = self.dim_reduction[1][i](out[i][1])
+			out[i][0] = F.sigmoid(self.dim_reduction[0][i](out[i][0]))
+			out[i][1] = F.sigmoid(self.dim_reduction[1][i](out[i][1]))
 			inp = torch.cat((out[i][0], out[i][1], x), dim=1)
 
 		for i in range(self.num_stacks):

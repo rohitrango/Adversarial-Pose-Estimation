@@ -5,5 +5,5 @@ CUDA_VISIBLE_DEVICES=2 python3 trainModel.py --path /mnt/a99/d0/shriramsb/Docume
 						--use_gpu \
 						--gpu_device 0 \
 						--lr 0.0001 \
-						--print_every 1 \
+						--print_every 10 \
 						--optimizer_type Adam

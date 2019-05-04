@@ -18,6 +18,7 @@ from datasets.lsp import LSP
 from generator import Generator
 from discriminator import Discriminator
 from losses import gen_single_loss, disc_single_loss, get_loss_disc
+import metrics
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--modelName', required=True, help='name of model; name used to create folder to save model')
@@ -31,8 +32,8 @@ parser.add_argument('--save_every', type=int, default=10, help='frequency of sav
 parser.add_argument('--optimizer_type', default='SGD', help='type of optimizer to use (SGD or Adam)')
 parser.add_argument('--use_gpu', action='store_true', help='whether to use gpu for training/testing')
 parser.add_argument('--gpu_device', type=int, default=0, help='GPU device which needs to be used for computation')
-parser.add_argument('--validation_sample_size', type=int, default=20, help='size of validation sample')
-parser.add_argument('--validate_every', type=int, default=100, help='frequency of evaluating on validation set')
+parser.add_argument('--validation_sample_size', type=int, default=1, help='size of validation sample')
+parser.add_argument('--validate_every', type=int, default=50, help='frequency of evaluating on validation set')
 
 parser.add_argument('--path', \
     default='/home/rohitrango/CSE_IITB/SEM8/CS763/Adversarial-Pose-Estimation/lspet_dataset')
@@ -45,9 +46,9 @@ parser.add_argument('--occlusion_sigma', type=float, default=5)
 args = parser.parse_args()
 
 # initialize seed to constant for reproducibility
-np.random.seed(0)
-torch.manual_seed(0)
-random.seed(0)
+np.random.seed(58)
+torch.manual_seed(58)
+random.seed(58)
 
 # create directory to store models if it doesn't exist
 # if it exists, delete the contents in the directory
@@ -77,7 +78,10 @@ args.mode = 'val'
 lsp_val_dataset = LSP(args)
 train_loader = torch.utils.data.DataLoader(lsp_train_dataset, batch_size=args.batch_size, shuffle=True)
 val_save_loader = torch.utils.data.DataLoader(lsp_val_dataset, batch_size=args.batch_size)
-val_eval_loader = torch.utils.data.DataLoader(lsp_val_dataset, batch_size=args.batch_size)
+val_eval_loader = torch.utils.data.DataLoader(lsp_val_dataset, batch_size=args.batch_size, shuffle=True)
+
+
+pck = metrics.PCK(metrics.Options(256, 4))
 
 # Loading on GPU, if available
 if (args.use_gpu):
@@ -160,7 +164,7 @@ val_pos = 0
 for epoch in range(args.epochs):
     print('epoch:', epoch)
 
-    if (epoch % args.save_every == 0):
+    if (epoch > 0 and epoch % args.save_every == 0):
         torch.save({'generator_model': generator_model,
                     'discriminator_model': discriminator_model,
                     'criterion': criterion, 
@@ -236,10 +240,11 @@ for epoch in range(args.epochs):
         if i % args.print_every == 0:
             print("Train iter: %d, generator loss : %f, discriminator loss : %f" % (i ,gen_losses[-1], disc_losses[-1]))
         
+        mean_eval_avg_acc, mean_eval_cnt = 0.0, 0.0
         if i % args.validate_every == 0:
-            for j, data in enumerate(val_save_loader):
-                # if (j == args.validation_sample_size):
-                    # break
+            for j, data in enumerate(val_eval_loader):
+                if (j == args.validation_sample_size):
+                    break
                 images = data['image']
         
                 ground_truth = {}
@@ -253,11 +258,12 @@ for epoch in range(args.epochs):
 
                 with torch.no_grad():
                     outputs = generator_model(images)
-                    cur_gen_loss_dic = gen_single_loss(ground_truth, outputs, discriminator_model)
-                    cur_disc_loss_dic = disc_single_loss(ground_truth, outputs, discriminator_model)
-
-                print("Validation generator loss: %f, discriminator loss: %f" % (gen_loss, disc_loss))
-                break
+                    outputs[-1] = outputs[-1][:, : config['dataset']['num_joints']]
+                    eval_avg_acc, eval_cnt = pck.StackedHourGlass(outputs, ground_truth['heatmaps'])
+                    mean_eval_avg_acc += eval_avg_acc
+                    mean_eval_cnt += eval_cnt
+            
+            print("Validation avg acc: %f, eval cnt: %f" % (mean_eval_avg_acc, mean_eval_cnt))
 
     epoch_gen_loss /= len(lsp_train_dataset)
     epoch_disc_loss /= len(lsp_train_dataset)
