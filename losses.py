@@ -11,7 +11,6 @@ def get_loss_recon(out, inp, mode):
 		loss = ((out - inp)**2).mean()
 	else:
 		raise NotImplementedError
-	
 	return loss
 
 
@@ -29,6 +28,7 @@ def get_loss_disc(output, discriminator, detach=False, real=True, eps=1e-5):
 
 def gen_loss(ground_truth,
 			 outputs,
+			 images,
 			 pose_discriminator,
 			 conf_discriminator,
 			 mode='mse',
@@ -39,13 +39,15 @@ def gen_loss(ground_truth,
 	Get generator loss
 	'''
 	gt_maps = torch.cat([ground_truth['heatmaps'], ground_truth['occlusions']], 1)
+	gt_w_images = torch.cat([gt_maps, images], 1)
 	loss_recon = 0.0
 	loss_conf_disc = 0.0
 	loss_pose_disc = 0.0
 	for output in outputs:
+		# MSE loss, confidence loss, pose loss
 		loss_recon = loss_recon + get_loss_recon(output, gt_maps, mode)
 		loss_conf_disc = loss_conf_disc + get_loss_disc(output, conf_discriminator)
-		loss_pose_disc = loss_pose_disc + get_loss_disc(output, pose_discriminator)
+		loss_pose_disc = loss_pose_disc + get_loss_disc(torch.cat([output, images], 1), pose_discriminator)
 
 	loss_recon = loss_recon / len(outputs)
 	loss_conf_disc = loss_conf_disc / len(outputs)
@@ -61,6 +63,7 @@ def gen_loss(ground_truth,
 
 def disc_loss(ground_truth,
 			 outputs,
+			 images,
 			 pose_discriminator,
 			 conf_discriminator,
 			 alpha=1/220.0,
@@ -70,12 +73,15 @@ def disc_loss(ground_truth,
 	Get discriminator loss
 	'''
 	gt_maps = torch.cat([ground_truth['heatmaps'], ground_truth['occlusions']], 1)
+	gt_w_images = torch.cat([gt_maps, images], 1)
 	loss_conf_real = get_loss_disc(gt_maps, conf_discriminator)
-	loss_pose_real = get_loss_disc(gt_maps, pose_discriminator)
+	loss_pose_real = get_loss_disc(gt_w_images, pose_discriminator)
 	# False for generator
 	for output in outputs:
-		loss_conf_disc = loss_conf_disc + get_loss_disc(output, conf_discriminator, detach=False, real=False)
-		loss_pose_disc = loss_pose_disc + get_loss_disc(output, pose_discriminator, detach=False, real=False)
+		loss_conf_disc = loss_conf_disc + \
+			get_loss_disc(output, conf_discriminator, detach=False, real=False)
+		loss_pose_disc = loss_pose_disc + \
+			get_loss_disc(torch.cat([output, images], 1), pose_discriminator, detach=False, real=False)
 
 	loss_conf_disc = loss_conf_disc / len(outputs)
 	loss_pose_disc = loss_pose_disc / len(outputs)
@@ -87,6 +93,7 @@ def disc_loss(ground_truth,
 		'conf_disc_fake': loss_conf_disc,
 		'pose_disc_fake': loss_pose_disc,
 	}
+
 
 def gen_single_loss(ground_truth,
 			 outputs,
