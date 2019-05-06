@@ -68,7 +68,6 @@ if (args.use_gpu):
 # config file storing hyperparameters
 config = importlib.import_module(args.config).config
 
-
 # Initializing the models
 generator_model = Generator(config['dataset']['num_joints'], config['generator']['num_stacks'], config['generator']['hourglass_params'], config['generator']['mid_channels'], config['generator']['preprocessed_channels'])
 discriminator_model = Discriminator(config['discriminator']['in_channels'], config['discriminator']['num_channels'], config['dataset']['num_joints'], config['discriminator']['num_residuals'])
@@ -198,7 +197,6 @@ for epoch in range(args.epochs):
     ################################## Check and complete the code here #######################################################
 
         ############# Forward pass and calculate losses here #########
-
         if (i % (config['training']['gen_iters'] + config['training']['disc_iters']) < config['training']['gen_iters']):
             # Generator training
             outputs = generator_model(images)
@@ -245,6 +243,17 @@ for epoch in range(args.epochs):
         if i % args.print_every == 0:
             print("Train iter: %d, generator loss : %f, discriminator loss : %f" % (i ,gen_losses[-1], disc_losses[-1]))
         
+        # Save model
+        ######################################################################################################################
+        if i > 0 and i % 400 == 0:
+            # Saving the model and the losses
+            torch.save({'generator_model': generator_model,
+                        'discriminator_model': discriminator_model,
+                        'criterion': criterion, 
+                        'optim_gen': optim_gen, 
+                        'optim_disc': optim_disc}, \
+                        os.path.join(args.modelName, 'model_' + str(i) + '.pt'))
+
         mean_eval_avg_acc, mean_eval_cnt = 0.0, 0.0
         if i % args.validate_every == 0:
             for j, data in enumerate(val_eval_loader):
@@ -276,18 +285,12 @@ for epoch in range(args.epochs):
     print('Epoch train gen loss: %f' % (epoch_gen_loss))
     print('Epoch train disc loss: %f' % (epoch_disc_loss))
 
-    ######################################################################################################################
-
-# Saving the model and the losses
-torch.save({'generator_model': generator_model,
-            'discriminator_model': discriminator_model,
-            'criterion': criterion, 
-            'optim_gen': optim_gen, 
-            'optim_disc': optim_disc}, os.path.join(args.modelName, 'model_' + str(epoch) + '.pt'))
-
 with open(os.path.join(args.modelName, 'stats.bin'), 'wb') as f:
     pickle.dump((disc_losses, gen_losses, val_disc_losses, val_gen_losses), f)
 
+
+
+    
 # Plotting the loss function
 plt.plot(loss)
 plt.savefig(os.path.join(args.modelName, 'loss_graph.pdf'))
