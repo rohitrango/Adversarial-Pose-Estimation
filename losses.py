@@ -2,6 +2,7 @@
 file containing loss functions
 '''
 import torch
+from torch.nn import functional as F
 
 def get_loss_recon(out, inp, mode):
 	'''
@@ -9,6 +10,13 @@ def get_loss_recon(out, inp, mode):
 	'''
 	if mode == 'mse':
 		loss = ((out - inp)**2).mean()
+	elif mode == 'bce':
+		# here target = out
+		# inp = ground truth
+		mask = (inp > 0).float()
+		f = mask.mean()
+		ratio = (1-f)/f
+		loss = F.binary_cross_entropy(out, mask, weight=(ratio**mask)).mean()
 	else:
 		raise NotImplementedError
 	return loss
