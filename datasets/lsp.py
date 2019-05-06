@@ -56,6 +56,7 @@ class LSP(Dataset):
 
     def __getitem__(self, idx):
         # if validation, offset index
+        idx = 0
         if self.mode == 'val':
             idx += int(self.train_split * len(self.files))
 
@@ -68,6 +69,7 @@ class LSP(Dataset):
         # image = image.merge('RGB', (r, g, b))
         # image = image.resize((self.crop_size, self.crop_size))
         image = cv2.cvtColor(cv2.imread(file_name), cv2.COLOR_BGR2RGB)
+        image = (image - 128.0)/ 128;
         crop_image = cv2.resize(image, (self.crop_size, self.crop_size))
 
         # Read annotations

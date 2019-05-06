@@ -27,6 +27,7 @@ parser.add_argument('--lr', type=float, default=0.01, help='learning rate')
 parser.add_argument('--epochs', type=int, default=50, help='number of epochs')
 parser.add_argument('--momentum', type=float, default=0.9, help='momentum in momentum optimizer')
 parser.add_argument('--batch_size', type=int, default=32, help='batch size for training, testing')
+parser.add_argument('--val_batch_size', type=int, default=1, help='batch size for validation')
 parser.add_argument('--print_every', type=int, default=1000, help='frequency to print train loss, accuracy to terminal')
 parser.add_argument('--save_every', type=int, default=10, help='frequency of saving the model')
 parser.add_argument('--optimizer_type', default='SGD', help='type of optimizer to use (SGD or Adam)')
@@ -89,11 +90,11 @@ elif args.dataset == 'mpii':
 
 # Dataset and the Dataloade
 train_loader = torch.utils.data.DataLoader(lsp_train_dataset, batch_size=args.batch_size, shuffle=True)
-val_save_loader = torch.utils.data.DataLoader(lsp_val_dataset, batch_size=args.batch_size)
-val_eval_loader = torch.utils.data.DataLoader(lsp_val_dataset, batch_size=args.batch_size, shuffle=True)
+val_save_loader = torch.utils.data.DataLoader(lsp_val_dataset, batch_size=args.val_batch_size)
+val_eval_loader = torch.utils.data.DataLoader(lsp_val_dataset, batch_size=args.val_batch_size, shuffle=True)
 
 
-pck = metrics.PCK(metrics.Options(256, 4))
+pck = metrics.PCK(metrics.Options(256, config['generator']['num_stacks']))
 
 # Loading on GPU, if available
 if (args.use_gpu):
@@ -217,7 +218,7 @@ for epoch in range(args.epochs):
             cur_gen_loss = cur_gen_loss_dic['loss']
             cur_disc_loss = cur_disc_loss_dic
 
-            loss = cur_gen_loss + config['training']['alpha'] * cur_disc_loss
+            loss = cur_gen_loss # + config['training']['alpha'] * cur_disc_loss
             loss.backward()
 
             optim_gen.step()
@@ -250,6 +251,20 @@ for epoch in range(args.epochs):
 
         if i % args.print_every == 0:
             print("Train iter: %d, generator loss : %f, discriminator loss : %f" % (i ,gen_losses[-1], disc_losses[-1]))
+
+            plt.clf()
+            plt.imshow(np.sum(outputs[0].detach().cpu().numpy()[0][0 : 14], axis=0))
+            plt.savefig('train_output.png')
+
+            plt.clf()
+            plt.imshow(np.sum(ground_truth['heatmaps'].detach().cpu().numpy()[0], axis=0))
+            plt.savefig('train_gt.png')
+
+            plt.clf()
+            # print("image shape: ", images.shape)
+            plt.imshow((images.detach().cpu().numpy()[0].transpose(1, 2, 0) * 128 + 128).astype(np.uint8))
+            plt.savefig('train_img.png')
+
         
         # Save model
         ######################################################################################################################
