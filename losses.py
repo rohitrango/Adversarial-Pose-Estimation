@@ -10,13 +10,15 @@ def get_loss_recon(out, inp, mode):
 	'''
 	if mode == 'mse':
 		loss = ((out - inp)**2).mean()
-	elif mode == 'bce':
+	elif mode == 'bce_skew':
 		# here target = out
 		# inp = ground truth
 		mask = (inp > 0).float()
 		f = mask.mean()
 		ratio = (1-f)/f
-		loss = F.binary_cross_entropy(out, mask, weight=(ratio**mask)).mean()
+		loss = F.binary_cross_entropy(out, inp, weight=(ratio**mask)).mean()
+	elif mode == 'bce':
+		loss = F.binary_cross_entropy(out, inp)
 	else:
 		raise NotImplementedError
 	return loss

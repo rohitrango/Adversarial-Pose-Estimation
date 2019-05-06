@@ -43,6 +43,7 @@ parser.add_argument('--train_split', type=float, default=0.95)
 parser.add_argument('--heatmap_sigma', type=float, default=2)
 parser.add_argument('--occlusion_sigma', type=float, default=5)
 parser.add_argument('--loss', type=str, default='mse')
+parser.add_argument('--dataset', type=str, required=True, choices=['mpii', 'lsp'])
 
 args = parser.parse_args()
 
@@ -76,10 +77,17 @@ discriminator_model = Discriminator(config['discriminator']['in_channels'], conf
 generator_model = nn.DataParallel(generator_model)
 discriminator_model = nn.DataParallel(discriminator_model)
 
-# Dataset and the Dataloader
-lsp_train_dataset = LSP(args)
-args.mode = 'val'
-lsp_val_dataset = LSP(args)
+# Datasets
+if args.dataset == 'lsp':
+    lsp_train_dataset = LSP(args)
+    args.mode = 'val'
+    lsp_val_dataset = LSP(args)
+# MPII
+elif args.dataset == 'mpii':
+    lsp_train_dataset = MPII('train')
+    lsp_val_dataset = MPII('val')
+
+# Dataset and the Dataloade
 train_loader = torch.utils.data.DataLoader(lsp_train_dataset, batch_size=args.batch_size, shuffle=True)
 val_save_loader = torch.utils.data.DataLoader(lsp_val_dataset, batch_size=args.batch_size)
 val_eval_loader = torch.utils.data.DataLoader(lsp_val_dataset, batch_size=args.batch_size, shuffle=True)
@@ -252,7 +260,7 @@ for epoch in range(args.epochs):
                         'criterion': criterion, 
                         'optim_gen': optim_gen, 
                         'optim_disc': optim_disc}, \
-                        os.path.join(args.modelName, 'model_' + str(i) + '.pt'))
+                        os.path.join(args.modelName, 'model_{}_{}.pt'.format(epoch, i)))
 
         mean_eval_avg_acc, mean_eval_cnt = 0.0, 0.0
         if i % args.validate_every == 0:
@@ -289,8 +297,6 @@ with open(os.path.join(args.modelName, 'stats.bin'), 'wb') as f:
     pickle.dump((disc_losses, gen_losses, val_disc_losses, val_gen_losses), f)
 
 
-
-    
 # Plotting the loss function
 plt.plot(loss)
 plt.savefig(os.path.join(args.modelName, 'loss_graph.pdf'))

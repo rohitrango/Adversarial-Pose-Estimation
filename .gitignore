@@ -1,3 +1,6 @@
 lspet_dataset
 lspet_dataset.zip
 first_run/*
+*zip
+mpii/*
+*.gz

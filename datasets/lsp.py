@@ -89,7 +89,7 @@ class LSP(Dataset):
 
         return {
             # image is in CHW format
-            'image': torch.Tensor(crop_image.transpose(2, 0, 1)),
+            'image': torch.Tensor(crop_image.transpose(2, 0, 1))/255.,
             'kp_2d': torch.Tensor(annot),
             'heatmaps': torch.Tensor(heatmaps),
             'occlusions': torch.Tensor(occlusions),
