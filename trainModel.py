@@ -42,6 +42,7 @@ parser.add_argument('--crop_size', default=256)
 parser.add_argument('--train_split', type=float, default=0.95)
 parser.add_argument('--heatmap_sigma', type=float, default=2)
 parser.add_argument('--occlusion_sigma', type=float, default=5)
+parser.add_argument('--loss', type=str, default='mse')
 
 args = parser.parse_args()
 
@@ -71,6 +72,10 @@ config = importlib.import_module(args.config).config
 # Initializing the models
 generator_model = Generator(config['dataset']['num_joints'], config['generator']['num_stacks'], config['generator']['hourglass_params'], config['generator']['mid_channels'], config['generator']['preprocessed_channels'])
 discriminator_model = Discriminator(config['discriminator']['in_channels'], config['discriminator']['num_channels'], config['dataset']['num_joints'], config['discriminator']['num_residuals'])
+
+# Use dataparallel
+generator_model = nn.DataParallel(generator_model)
+discriminator_model = nn.DataParallel(discriminator_model)
 
 # Dataset and the Dataloader
 lsp_train_dataset = LSP(args)
@@ -139,7 +144,7 @@ def evaluate_model(args, epoch, val_loader, fast_device, generator_model, discri
 
         with torch.no_grad():
             outputs = generator_model(images)
-            cur_gen_loss_dic = gen_single_loss(ground_truth, outputs, discriminator_model)
+            cur_gen_loss_dic = gen_single_loss(ground_truth, outputs, discriminator_model, mode=args.loss)
             cur_disc_loss_dic = disc_single_loss(ground_truth, outputs, discriminator_model)
 
             cur_gen_loss = cur_gen_loss_dic['loss']
@@ -198,7 +203,7 @@ for epoch in range(args.epochs):
             # Generator training
             outputs = generator_model(images)
 
-            cur_gen_loss_dic = gen_single_loss(ground_truth, outputs, discriminator_model)
+            cur_gen_loss_dic = gen_single_loss(ground_truth, outputs, discriminator_model, mode=args.loss)
             cur_disc_loss_dic = 0.0
             for output in outputs:
                 cur_disc_loss_dic = get_loss_disc(output, discriminator_model, real=True)
@@ -216,7 +221,7 @@ for epoch in range(args.epochs):
             # Discriminator training
             outputs = generator_model(images)
 
-            cur_gen_loss_dic = gen_single_loss(ground_truth, outputs, discriminator_model)
+            cur_gen_loss_dic = gen_single_loss(ground_truth, outputs, discriminator_model, mode=args.loss)
             cur_disc_loss_dic = disc_single_loss(ground_truth, outputs, discriminator_model, detach=True)
 
             cur_gen_loss = cur_gen_loss_dic['loss']
