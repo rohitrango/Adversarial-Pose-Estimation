@@ -15,6 +15,7 @@ from torchvision import datasets, models, transforms
 import cv2
 
 from datasets.lsp import LSP
+from datasets.mpii import MPII
 from generator import Generator
 from discriminator import Discriminator
 from losses import gen_single_loss, disc_single_loss, get_loss_disc
@@ -116,6 +117,14 @@ elif (args.optimizer_type == 'Adam'):
 else:
     raise NotImplementedError
 
+
+# Load model
+# modelpath = torch.load('MPII_BCE/model.pt')
+# generator_model = modelpath['generator_model']
+# discriminator_model = modelpath['discriminator_model']
+# optim_gen = modelpath['optim_gen']
+# optim_disc = modelpath['optim_disc']
+# print("Loaded.")
 # The main training loop
 gen_losses = []
 disc_losses = []
@@ -268,7 +277,7 @@ for epoch in range(args.epochs):
         
         # Save model
         ######################################################################################################################
-        if i > 0 and i % 400 == 0:
+        if i > 0 and i % 5000 == 0:
             # Saving the model and the losses
             torch.save({'generator_model': generator_model,
                         'discriminator_model': discriminator_model,

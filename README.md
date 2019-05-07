@@ -1,3 +1,4 @@
+
 # Adversarial Pose Estimation
 ## Abstract
 This repository aims to replicate the results of [this](https://arxiv.org/pdf/1705.00389v2.pdf) paper. The idea is to augment the human pose estimation by using a GAN-based framework, where the (conditional) generator learns the distribution P(y|x), where x is the image and y is the heatmap for the person. Typical keypoint detectors simply employ a similarity based loss (MSE or cross-entropy) on the predicted heatmaps with the ground-truth heatmaps. However, these losses can predicted smooth outputs as they are averaged over the entire spatial domain. The idea here is to make the predictions ''crisper and sharper'' by employing discriminators that differentiate between ground-truth and predicted heatmaps in 2 different ways.
@@ -33,7 +34,11 @@ Running the code for training is fairly easy. Follow these steps.
 - The pretrained file can be found in the Downloads sections of the README.
 
 ## Results 
-Coming soon.
+We got a PCK@0.5 value of **0.606893** over the validation dataset. We trained on binary cross entropy loss with a batch size of 1. This score is low, however, we trained it for about a day only (since we had bugs in our previous codes). Here are some qualitative results:
+
+![mpii_1](https://raw.githubusercontent.com/rohitrango/Adversarial-Pose-Estimation/master/images/mpii_1.png)
+
+![mpii_2](https://raw.githubusercontent.com/rohitrango/Adversarial-Pose-Estimation/master/images/mpii_2.png)
 
 ## References
 If you liked this repository, and would like to use it in your work, consider citing the original paper.

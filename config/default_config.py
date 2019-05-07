@@ -9,7 +9,7 @@ hourglass_params['num_reductions'] = 4
 hourglass_params['num_residual_modules'] = 2
 
 dataset = {}
-dataset['num_joints'] = 14
+dataset['num_joints'] = 16
 
 pose_discriminator = {}
 # TODO: base case now; add 3 later for in_channels

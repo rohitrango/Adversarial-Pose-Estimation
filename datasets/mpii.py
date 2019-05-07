@@ -74,7 +74,12 @@ class MPII(data.Dataset):
 			inp[1] = np.clip(inp[1] * (np.random.random() * (0.4) + 0.6), 0, 1)
 			inp[2] = np.clip(inp[2] * (np.random.random() * (0.4) + 0.6), 0, 1)
 
-		return inp, out
+		return {
+			'image': torch.Tensor(inp),
+			'heatmaps': torch.Tensor(out),
+			'occlusions': torch.Tensor(np.zeros(out.shape)),
+		}
+		# return inp, out
 		# if self.opts.TargetType=='heatmap':
 		# 	return inp, out#, self.stuff1[index], self.stuff2[index]
 		# elif self.opts.TargetType=='direct':
@@ -90,8 +95,8 @@ if __name__ == '__main__':
 		ii = np.random.randint(len(dataset))
 		data = dataset[ii]
 		plt.subplot(1, 2, 1)
-		plt.imshow(data[0].transpose(1, 2, 0)[:, :, ::-1] + 0)
+		plt.imshow(data['image'].transpose(1, 2, 0)[:, :, ::-1] + 0)
 		plt.subplot(1, 2, 2)
-		print(data[1].shape)
-		plt.imshow(data[1].max(0))
+		print(data['heatmaps'].shape)
+		plt.imshow(data['heatmaps'].max(0))
 		plt.show()

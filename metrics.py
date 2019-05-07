@@ -93,7 +93,7 @@ class PCK(object):
          if acc[i + 1] >= 0:
              avg_acc = avg_acc + acc[i + 1]
              cnt += 1
-         print('acc[%d] = %f' % (i + 1, acc[i + 1]))
+         # print('acc[%d] = %f' % (i + 1, acc[i + 1]))
 
         avg_acc = 1.0 * avg_acc / cnt if cnt != 0 else 0
         if cnt != 0:
