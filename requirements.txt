@@ -1,5 +1,5 @@
 numpy==1.16.1
-opencv-contrib-python==4.1.0.25
+opencv-contrib-python==4.2.0.32
 pandocfilters==1.4.2
 Pillow>=6.2.2
 protobuf==3.6.1
