@@ -3,7 +3,7 @@ opencv-contrib-python==4.2.0.32
 pandocfilters==1.4.2
 Pillow>=6.2.2
 protobuf==3.6.1
-scipy==1.2.1
+scipy==1.10.0
 six==1.12.0
 tensorboardX==1.6
 torch==1.0.1
